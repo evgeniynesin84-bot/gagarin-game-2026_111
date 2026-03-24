@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Гагарин: Первый в космосе — Telegram игра</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Russo+One&display=swap');
+
+  :root {
+    --space: #020818;
+    --deep: #050f2e;
+    --star: #e8f4ff;
+    --red: #cc2200;
+    --gold: #f5c842;
+    --orange: #f07020;
+    --panel: rgba(10,30,80,0.85);
+    --glow: #4af;
+  }
+
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background: var(--space);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Press Start 2P', monospace;
+    overflow: hidden;
+    user-select: none;
+    touch-action: manipulation; /* отключаем зумирование жестами */
+    padding: 12px;
+  }
+
+  /* Контейнер с фиксированным соотношением 480x640, но адаптивный */
+  #wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 500px;     /* комфортный максимум для больших экранов */
+    aspect-ratio: 480 / 640; /* сохраняем пропорции 3:4 */
+    margin: 0 auto;
+    box-shadow: 0 0 40px rgba(40,100,255,0.2);
+    border-radius: 24px;
+    overflow: hidden;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: crisp-edges;   /* пиксельная чёткость */
+    image-rendering: pixelated;
+    background: var(--space);
+    cursor: pointer;
+  }
+
+  /* Слой интерфейса — накладывается на canvas абсолютно */
+  #ui {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+  }
+
+  #score-display {
+    display: none;
+  }
+
+  /* Оверлей (меню, ввод имени, таблица рекордов) */
+  #overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(2, 8, 24, 0.92);
+    backdrop-filter: blur(3px);
+    pointer-events: all;
+    transition: opacity 0.25s ease;
+    padding: 20px;
+    overflow-y: auto;
+    gap: 14px;
+  }
+
+  #overlay.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* Скролл внутри оверлея если много записей */
+  #overlay::-webkit-scrollbar {
+    width: 4px;
+    background: #112244;
+  }
+  #overlay::-webkit-scrollbar-thumb {
+    background: #f5c842;
+    border-radius: 4px;
+  }
+
+  .ussr-badge {
+    width: 64px;
+    height: 64px;
+    background: var(--red);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    box-shadow: 0 0 20px var(--red);
+    margin-bottom: 8px;
+    animation: pulse 2s infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 20px var(--red); }
+    50% { box-shadow: 0 0 40px var(--red), 0 0 60px rgba(200,0,0,0.4); }
+  }
+
+  .title-main {
+    font-family: 'Russo One', sans-serif;
+    font-size: clamp(22px, 7vw, 34px);
+    color: var(--gold);
+    text-shadow: 0 0 12px var(--gold), 2px 2px 0 var(--red);
+    margin-bottom: 4px;
+    letter-spacing: 2px;
+    text-align: center;
+  }
+
+  .title-sub {
+    font-size: clamp(6px, 2.5vw, 8px);
+    color: #9bb;
+    letter-spacing: 2px;
+    text-align: center;
+    margin-bottom: 8px;
+    padding: 0 8px;
+  }
+
+  .fact-box {
+    background: var(--panel);
+    border: 1px solid #1a4a9a;
+    border-left: 4px solid var(--gold);
+    padding: 12px 14px;
+    max-width: 340px;
+    width: 100%;
+    margin: 6px 0;
+    font-size: clamp(6px, 2.2vw, 7.5px);
+    color: #acd;
+    line-height: 1.6;
+    text-align: center;
+    border-radius: 12px;
+    backdrop-filter: blur(2px);
+  }
+
+  .fact-box span {
+    color: var(--gold);
+    font-weight: bold;
+  }
+
+  .btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(9px, 3.5vw, 12px);
+    padding: 12px 28px;
+    background: var(--red);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #7a0000, 0 0 20px rgba(200,0,0,0.5);
+    transition: transform 0.08s linear, box-shadow 0.1s;
+    letter-spacing: 1px;
+    pointer-events: all;
+    border-radius: 60px;
+    margin-top: 6px;
+  }
+
+  .btn:hover {
+    background: #e03000;
+    box-shadow: 0 4px 0 #7a0000, 0 0 30px rgba(200,0,0,0.7);
+  }
+
+  .btn:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #7a0000;
+  }
+
+  .controls-hint {
+    margin-top: 12px;
+    font-size: clamp(5px, 2vw, 7px);
+    color: #689;
+    letter-spacing: 1px;
+    text-align: center;
+    background: rgba(0,0,0,0.4);
+    padding: 6px 12px;
+    border-radius: 40px;
+  }
+
+  #gameover-panel {
+    text-align: center;
+  }
+
+  .result-score {
+    font-size: 8px;
+    color: #8ab;
+    margin-bottom: 4px;
+  }
+
+  .result-num {
+    font-size: 32px;
+    color: var(--gold);
+    text-shadow: 0 0 20px var(--gold);
+    margin-bottom: 4px;
+    font-family: 'Russo One', sans-serif;
+  }
+
+  .result-best {
+    font-size: 7px;
+    color: #456;
+    margin-bottom: 18px;
+  }
+
+  .result-best span {
+    color: #8ab;
+  }
+
+  /* Панель ввода имени */
+  #name-panel {
+    width: 100%;
+    max-width: 320px;
+    text-align: center;
+    margin-top: 8px;
+    background: rgba(0,0,0,0.5);
+    padding: 12px 10px;
+    border-radius: 20px;
+  }
+
+  #name-input {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(8px, 3vw, 10px);
+    background: rgba(10, 30, 80, 0.9);
+    border: 1px solid #2a5aaa;
+    border-bottom: 2px solid #f5c842;
+    color: #f5c842;
+    padding: 10px 12px;
+    width: 100%;
+    outline: none;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    border-radius: 28px;
+    text-align: center;
+  }
+
+  #lb-wrap {
+    width: 100%;
+    max-width: 380px;
+    margin-top: 12px;
+    background: rgba(0, 0, 0, 0.55);
+    border-radius: 20px;
+    padding: 10px 6px;
+    backdrop-filter: blur(4px);
+  }
+
+  #lb-list {
+    font-size: clamp(5px, 2.3vw, 7px);
+    font-family: 'Press Start 2P', monospace;
+    color: #acd;
+    line-height: 1.5;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  /* кнопка старт при скрытой панели */
+  #start-btn {
+    margin-top: 8px;
+  }
+
+  /* адаптивные отступы */
+  @media (max-width: 550px) {
+    body {
+      padding: 8px;
+    }
+    .ussr-badge {
+      width: 54px;
+      height: 54px;
+      font-size: 28px;
+    }
+    .fact-box {
+      padding: 10px 12px;
+    }
+  }
+</style>
+</head>
+<body>
+<div id="wrapper">
+  <canvas id="c" width="480" height="640"></canvas>
+  <div id="ui">
+    <div id="score-display">⭐ <span id="sc">0</span> &nbsp;&nbsp; 🏆 <span id="best">0</span></div>
+    <div id="overlay">
+      <div class="ussr-badge">☭</div>
+      <div class="title-main">ГАГАРИН</div>
+      <div class="title-sub">ПЕРВЫЙ В КОСМОСЕ · 12 АПРЕЛЯ 1961</div>
+      <div class="fact-box" id="fact-box">
+        <span>«Поехали!»</span><br>
+        Юрий Гагарин — первый человек в космосе.<br>
+        Полёт длился <span>108 минут</span>.<br>
+        Корабль «Восток-1» облетел Землю 1 раз.
+      </div>
+      <button class="btn" id="start-btn">▶ ПОЕХАЛИ!</button>
+      <div class="controls-hint" id="ctrl-hint">🚀 ПРОБЕЛ / КЛИК / ТАП — тяга двигателя</div>
+
+      <!-- Панель ввода имени после игры -->
+      <div id="name-panel" style="display:none;">
+        <div style="font-size:7px;color:#acd;letter-spacing:2px;margin-bottom:8px">ВАШ ПОЗЫВНОЙ:</div>
+        <input id="name-input" maxlength="16" placeholder="ВВЕДИ ИМЯ..."
+          style="font-family:'Press Start 2P',monospace;font-size:9px;background:rgba(10,30,80,0.9);
+          border:1px solid #2a5aaa;border-bottom:2px solid #f5c842;color:#f5c842;padding:10px 14px;
+          width:100%;outline:none;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;border-radius:40px;" />
+        <button class="btn" id="save-btn" style="font-size:9px;padding:8px 20px;">✓ ЗАПИСАТЬ</button>
+      </div>
+
+      <!-- Таблица рекордов -->
+      <div id="lb-wrap" style="display:none;">
+        <div style="font-size:7px;color:#f5c842;letter-spacing:2px;text-align:center;margin-bottom:8px">🏆 ТАБЛИЦА РЕКОРДОВ</div>
+        <div id="lb-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const W = 480, H = 640;
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('start-btn');
+const scEl = document.getElementById('sc');
+const bestEl = document.getElementById('best');
+const factBox = document.getElementById('fact-box');
+const lbWrap = document.getElementById('lb-wrap');
+const lbList = document.getElementById('lb-list');
+
+// === ФОРМАТИРОВАНИЕ ВРЕМЕНИ ===
+function formatTime(s) {
+  if(!s || s <= 0) return '—';
+  const m = Math.floor(s/60);
+  const sec = (s % 60).toFixed(2).padStart(5,'0');
+  return m > 0 ? `${m}:${sec}` : `${sec}с`;
+}
+
+// === ОТРИСОВКА ТАБЛИЦЫ ЛИДЕРОВ ===
+function renderLeaderboard() {
+  if(leaderboard.length === 0) { lbWrap.style.display = 'none'; return; }
+  lbWrap.style.display = 'block';
+  lbList.innerHTML = leaderboard.map((e, i) => {
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
+    const crown = e.won ? '👑' : '💥';
+    const scoreStr = e.won ? '108/108' : `${e.score}/108`;
+    const timeStr = formatTime(e.time);
+    const col = e.won ? '#f5c842' : '#8ab';
+    const name = e.name || 'АНОНИМ';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;margin-bottom:3px;background:rgba(255,255,255,0.05);border-left:2px solid ${e.won?'#f5c842':'#335'};border-radius:12px;">
+      <span style="min-width:28px">${medal}</span>
+      <span style="flex:1;color:#fff;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;margin:0 5px">${crown} ${name}</span>
+      <span style="color:${col};margin:0 5px">${scoreStr}</span>
+      <span style="color:#88ddff;white-space:nowrap">${timeStr}</span>
+    </div>`;
+  }).join('');
+}
+
+// --- Глобальные переменные ---
+let leaderboard = [];
+const LB_MAX = 7;
+let pendingResult = null;     // результат, ожидающий ввода имени
+
+const namePanel = document.getElementById('name-panel');
+const nameInput = document.getElementById('name-input');
+const saveBtn = document.getElementById('save-btn');
+const ctrlHint = document.getElementById('ctrl-hint');
+
+// Сохранение результата с именем
+function savePendingResult() {
+  const name = nameInput.value.trim().toUpperCase() || 'АНОНИМ';
+  if(pendingResult) {
+    pendingResult.name = name;
+    leaderboard.push(pendingResult);
+    leaderboard.sort((a, b) => {
+      if(a.won && !b.won) return -1;
+      if(!a.won && b.won) return 1;
+      if(a.won && b.won) return a.time - b.time;
+      return b.score - a.score;
+    });
+    if(leaderboard.length > LB_MAX) leaderboard = leaderboard.slice(0, LB_MAX);
+    pendingResult = null;
+  }
+  nameInput.value = '';
+  namePanel.style.display = 'none';
+  startBtn.style.display = '';
+  ctrlHint.style.display = '';
+  renderLeaderboard();
+  // показать оверлей с обновлённой таблицей
+  if(overlay.classList.contains('hidden')) overlay.classList.remove('hidden');
+}
+
+saveBtn.addEventListener('click', savePendingResult);
+nameInput.addEventListener('keydown', e => {
+  if(e.key === 'Enter') { e.preventDefault(); savePendingResult(); }
+  e.stopPropagation();
+});
+
+// Показ панели ввода имени
+function showNameEntry() {
+  renderLeaderboard();
+  namePanel.style.display = 'block';
+  startBtn.style.display = 'none';
+  ctrlHint.style.display = 'none';
+  overlay.classList.remove('hidden');
+  setTimeout(() => nameInput.focus(), 150);
+}
+
+function addToLeaderboard(score, time, won) {
+  pendingResult = { score, time, won, name: null };
+}
+
+// --- ИСТОРИЧЕСКИЕ ФАКТЫ (ротация)---
+const FACTS = [
+  `Гагарин произнёс знаменитое <span>«Поехали!»</span> в 9:07 утра<br>по московскому времени.`,
+  `Позывной Гагарина был <span>«Кедр»</span>.<br>Земля отвечала позывным <span>«Заря»</span>.`,
+  `Максимальная высота полёта составила <span>327 км</span><br>над поверхностью Земли.`,
+  `Гагарин катапультировался из капсулы<br>на высоте <span>7 км</span> и приземлился на парашюте.`,
+  `Скорость корабля «Восток-1» достигала<br><span>27 400 км/ч</span> — 8 км в секунду!`,
+  `Полный оборот вокруг Земли занял<br>ровно <span>89 минут</span>. Весь полёт — 108.`,
+  `До старта Гагарин сказал дублёру<br>Титову: <span>«Следующий полёт — твой»</span>.`,
+  `«Восток-1» нёс запас воды и еды<br>на <span>10 суток</span> — на случай аварии.`,
+];
+let factIdx = 0;
+function showFact(i) {
+  factBox.innerHTML = FACTS[i % FACTS.length];
+}
+
+// === ЗВЁЗДЫ ===
+const STARS = [];
+for(let i=0;i<180;i++) STARS.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.5+0.3,speed:Math.random()*0.4+0.1,bright:Math.random()});
+
+// --- ПЕРЕМЕННЫЕ ИГРЫ ---
+let state = 'title'; // title | waiting | playing | dead | won
+let gy, gvy, score, best=0, frame, obstacles, particles, exhaust;
+let flashTimer = 0;
+let startTime = 0;
+let elapsedTime = 0;
+let bestTime = 0;
+
+// Аудио-контекст
+let audioCtx = null;
+function getAudio() {
+  if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+  return audioCtx;
+}
+function playTone(freq, type, vol, dur, fadeOut=true) {
+  try {
+    const ac = getAudio();
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain); gain.connect(ac.destination);
+    osc.type = type; osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol, ac.currentTime);
+    if(fadeOut) gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+dur);
+    osc.start(); osc.stop(ac.currentTime+dur);
+  } catch(e){}
+}
+function playThrust() {
+  try {
+    const ac = getAudio();
+    const buf = ac.createBuffer(1, ac.sampleRate*0.12, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*0.18*(1-i/d.length);
+    const src = ac.createBufferSource();
+    const gain = ac.createGain();
+    gain.gain.value = 0.35;
+    src.buffer = buf; src.connect(gain); gain.connect(ac.destination);
+    src.start();
+  } catch(e){}
+}
+function playPass() { playTone(440, 'sine', 0.18, 0.08, false); setTimeout(()=>playTone(660,'sine',0.14,0.1),60); }
+function playExplosion() {
+  try {
+    const ac = getAudio();
+    const buf = ac.createBuffer(1, ac.sampleRate*0.6, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,0.4)*0.6;
+    const src = ac.createBufferSource();
+    const gain = ac.createGain();
+    gain.gain.value = 0.7;
+    src.buffer = buf; src.connect(gain); gain.connect(ac.destination);
+    src.start();
+  } catch(e){}
+}
+function playWin() { [523,659,784,1047].forEach((f,i)=>setTimeout(()=>playTone(f,'sine',0.22,0.3),i*140)); }
+
+let shakeAmt = 0;
+function addShake(amt) { shakeAmt = Math.max(shakeAmt, amt); }
+
+// --- ПАРТИКЛЫ ПРОЛЁТА ---
+let passParticles = [];
+function spawnPassEffect(x, y) {
+  for(let i=0;i<16;i++){
+    const ang = Math.random()*Math.PI*2;
+    const spd = 1.5+Math.random()*3;
+    passParticles.push({
+      x, y,
+      vx: Math.cos(ang)*spd,
+      vy: Math.sin(ang)*spd,
+      life: 22+Math.random()*14,
+      maxLife: 36,
+      color: `hsl(${40+Math.random()*40},100%,${60+Math.random()*30}%)`
+    });
+  }
+}
+
+let winOrbitAngle = 0;
+
+// --- СБРОС ИГРЫ ---
+function resetGame() {
+  gy = H/2;
+  gvy = 0;
+  score = 0;
+  frame = 0;
+  obstacles = [];
+  particles = [];
+  exhaust = [];
+  flashTimer = 0;
+  startTime = 0;
+  elapsedTime = 0;
+  lastGapY = H / 2;
+}
+
+const OBS_W = 52;
+const OBS_GAP = 220;
+const OBS_SPEED = 2.2;
+const OBS_INTERVAL = 115;
+let lastGapY = H/2;
+
+function spawnObstacle() {
+  const maxDrift = 90;
+  const minY = 130, maxY = H - 130;
+  let gapY = lastGapY + (Math.random() - 0.5) * 2 * maxDrift;
+  gapY = Math.max(minY, Math.min(maxY, gapY));
+  lastGapY = gapY;
+  obstacles.push({x: W+20, gapY, passed: false, seed: Math.floor(Math.random()*9999)});
+}
+
+function spawnParticle(x, y, color, vx, vy, life) {
+  particles.push({x,y,vx,vy,life,maxLife:life,color});
+}
+function spawnExhaust(x, y) {
+  for(let i=0;i<3;i++) exhaust.push({x: x+Math.random()*6-3, y: y+Math.random()*4, vx: (Math.random()-0.5)*1.2, vy: 1.5+Math.random()*2, life: 18+Math.random()*12, maxLife: 30, r: 3+Math.random()*4});
+}
+
+// --- ОТРИСОВКА ---
+function drawStars(scroll) {
+  STARS.forEach(s => {
+    const sy = (s.y + scroll * s.speed * 0.3) % H;
+    const alpha = 0.4 + 0.6*s.bright + Math.sin(frame*0.02 + s.x)*0.15;
+    ctx.globalAlpha = Math.max(0,Math.min(1,alpha));
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(s.x, sy, s.r, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+let earthAngle = 0;
+function drawEarth(extra=0) {
+  const ey = H + 90 + extra;
+  earthAngle += 0.0008;
+  const grad = ctx.createRadialGradient(W/2, ey, 20, W/2, ey, 200);
+  grad.addColorStop(0, '#1a6fff');
+  grad.addColorStop(0.5, '#0040bb');
+  grad.addColorStop(1, 'transparent');
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(W/2, ey, 200, 0, Math.PI*2); ctx.fill();
+  ctx.save();
+  ctx.beginPath(); ctx.arc(W/2, ey, 195, 0, Math.PI*2); ctx.clip();
+  const continents = [{dx:0.6,dy:0.1,rx:50,ry:35},{dx:-0.5,dy:-0.2,rx:40,ry:28},{dx:0.1,dy:0.5,rx:30,ry:20},{dx:-0.2,dy:0.3,rx:22,ry:16}];
+  continents.forEach((c,i)=>{
+    const ang = earthAngle + i*1.7;
+    const cx = W/2 + Math.cos(ang)*190*c.dx;
+    const cy = ey + Math.sin(ang*0.7)*190*c.dy;
+    ctx.fillStyle='rgba(34,120,34,0.55)';
+    ctx.beginPath();
+    ctx.ellipse(cx,cy,c.rx,c.ry,ang*0.5,0,Math.PI*2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function seededRand(seed) {
+  let s = seed;
+  return function() { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
+}
+function drawAsteroidCluster(cx, cy, size, seed) {
+  const rng = seededRand(seed);
+  const N = 7 + Math.floor(rng() * 4);
+  ctx.beginPath();
+  for(let i=0;i<N;i++){
+    const ang = (i/N)*Math.PI*2;
+    const r = size * (0.72 + rng()*0.28);
+    const px = cx + Math.cos(ang)*r;
+    const py = cy + Math.sin(ang)*r;
+    i===0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
+  }
+  ctx.closePath();
+  const g = ctx.createRadialGradient(cx-size*0.2, cy-size*0.2, size*0.1, cx, cy, size);
+  g.addColorStop(0, '#7a6a58'); g.addColorStop(0.5, '#4a3e32'); g.addColorStop(1, '#2a2018');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = '#3a3028'; ctx.lineWidth = 1; ctx.stroke();
+}
+function drawObstacle(obs) {
+  const x = obs.x + OBS_W/2;
+  const topH = obs.gapY - OBS_GAP/2;
+  const botY = obs.gapY + OBS_GAP/2;
+  const seed = obs.seed;
+  let ty = 0, idx = 0;
+  while(ty < topH - 10) {
+    const sz = 28 + (seededRand(seed+idx*7))() * 14;
+    const ox = x + (seededRand(seed+idx*13))() * 14 - 7;
+    drawAsteroidCluster(ox, ty + sz*0.8, sz, seed+idx*31);
+    ty += sz * 1.3; idx++;
+  }
+  let by = H; idx = 0;
+  while(by > botY + 10) {
+    const sz = 28 + (seededRand(seed+idx*5+99))() * 14;
+    const ox = x + (seededRand(seed+idx*17+99))() * 14 - 7;
+    drawAsteroidCluster(ox, by - sz*0.8, sz, seed+idx*23+77);
+    by -= sz * 1.3; idx++;
+  }
+}
+function drawGagarin(x, y, thrusting) {
+  ctx.save();
+  ctx.translate(x, y);
+  const angle = Math.atan2(gvy, 8) * 0.35;
+  ctx.rotate(angle);
+  ctx.fillStyle = '#444';
+  ctx.beginPath(); ctx.ellipse(0, 24, 10, 6, 0, 0, Math.PI*2); ctx.fill();
+  if(thrusting) {
+    for(let f=0;f<6;f++){
+      const flen = 18+Math.random()*22;
+      const spread = (Math.random()-0.5)*14;
+      const gr = ctx.createLinearGradient(0,24,spread,24+flen);
+      gr.addColorStop(0,'rgba(255,220,60,1)'); gr.addColorStop(0.4,'rgba(255,100,0,0.85)'); gr.addColorStop(1,'rgba(255,30,0,0)');
+      ctx.fillStyle = gr;
+      ctx.beginPath(); ctx.moveTo(-6+spread*0.3,24); ctx.lineTo(spread*0.5,24+flen); ctx.lineTo(6+spread*0.3,24); ctx.fill();
+    }
+  } else {
+    const flen = 6+Math.random()*5;
+    const gr = ctx.createLinearGradient(0,24,0,24+flen);
+    gr.addColorStop(0,'rgba(255,160,30,0.6)'); gr.addColorStop(1,'rgba(255,60,0,0)');
+    ctx.fillStyle = gr;
+    ctx.beginPath(); ctx.moveTo(-4,24); ctx.lineTo(0,24+flen); ctx.lineTo(4,24); ctx.fill();
+  }
+  ctx.fillStyle = '#e0e0e0';
+  ctx.beginPath(); ctx.ellipse(0,12,14,14,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#2a6f9f'; ctx.beginPath(); ctx.ellipse(0,10,4,4,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(1,8.5,0.8,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#c0c0c0'; ctx.fillRect(-9,-6,18,18);
+  ctx.fillStyle='#f57c00'; ctx.fillRect(-9,2,18,4); ctx.fillRect(-9,-4,18,3);
+  ctx.font='bold 6px "Press Start 2P"'; ctx.fillStyle='#c22'; ctx.fillText('CCCP',0,-1);
+  ctx.fillStyle = '#e0e0ee';
+  ctx.beginPath(); ctx.moveTo(-8,-6); ctx.lineTo(0,-20); ctx.lineTo(8,-6); ctx.fill();
+  ctx.strokeStyle='#aaa'; ctx.beginPath(); ctx.moveTo(0,-20); ctx.lineTo(0,-27); ctx.stroke();
+  ctx.fillStyle='#e0b060'; ctx.beginPath(); ctx.arc(0,-27,2,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function drawHUD() {
+  ctx.fillStyle = 'rgba(2,8,30,0.75)'; ctx.fillRect(0, 0, W, 48);
+  const barX = 10, barY = 34, barW = W-20, barH = 8;
+  ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(barX, barY, barW, barH);
+  const prog = Math.min(score/108, 1);
+  ctx.fillStyle = `hsl(${30+prog*50}, 70%, 55%)`; ctx.fillRect(barX, barY, barW*prog, barH);
+  ctx.font = '9px "Press Start 2P"'; ctx.fillStyle = '#f5c842'; ctx.fillText(score + '/108', barX, 22);
+  ctx.fillStyle = '#88ddff'; ctx.fillText('⏱ ' + formatTime(elapsedTime), W-barX, 22);
+}
+function explode(x,y) { for(let i=0;i<30;i++){ const ang=Math.random()*Math.PI*2; spawnParticle(x,y,`hsl(${20+Math.random()*40},100%,50%)`,Math.cos(ang)*(1+Math.random()*5),Math.sin(ang)*(1+Math.random()*5),30+Math.random()*30); } }
+function checkCollision() {
+  if(gy-16<0 || gy+16>H) return true;
+  for(const obs of obstacles){
+    const ox=obs.x, topH=obs.gapY-OBS_GAP/2, botY=obs.gapY+OBS_GAP/2;
+    if(80+16 > ox-6 && 80-16 < ox+OBS_W+6) if(gy-16 < topH || gy+16 > botY) return true;
+  }
+  return false;
+}
+function drawWin() {
+  ctx.fillStyle = 'rgba(2,4,16,0.8)'; ctx.fillRect(0,0,W,H);
+  ctx.font = '22px "Press Start 2P"'; ctx.fillStyle = '#f5c842'; ctx.fillText('ПОЕХАЛИ!', W/2, H/2-130);
+  ctx.font = '8px "Press Start 2P"'; ctx.fillStyle = '#acd'; ctx.fillText('108 АСТЕРОИДНЫХ ПОЛЕЙ ПРОЙДЕНО', W/2, H/2-96);
+  ctx.font = '7px "Press Start 2P"'; ctx.fillStyle = '#88ddff'; ctx.fillText('ВРЕМЯ ПОЛЁТА', W/2, H/2-40);
+  ctx.font = '38px "Russo One"'; ctx.fillStyle = '#fff'; ctx.fillText(formatTime(elapsedTime), W/2, H/2+2);
+  if(bestTime>0) ctx.fillStyle = '#f5c842'; ctx.font = '6px "Press Start 2P"'; ctx.fillText('🏆 РЕКОРД: '+formatTime(bestTime), W/2, H/2+36);
+}
+function drawGameOver() {
+  ctx.fillStyle = 'rgba(2,4,16,0.85)'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = '#cc2200'; ctx.font = '9px "Press Start 2P"'; ctx.fillText('КОНТАКТ С АСТЕРОИДОМ', W/2, H/2-110);
+  ctx.fillStyle = '#f5c842'; ctx.font = '52px "Russo One"'; ctx.fillText(score+'/108', W/2, H/2-28);
+  ctx.fillStyle = '#88ddff'; ctx.font = '13px "Russo One"'; ctx.fillText(formatTime(elapsedTime), W/2, H/2+42);
+}
+let thrusting = false;
+let obsTimer = 0;
+let animId = null;
+
+function thrust() {
+  if(state === 'waiting') { state = 'playing'; startTime = performance.now(); gvy = -5.5; thrusting=true; playThrust(); setTimeout(()=>thrusting=false,120); }
+  else if(state === 'playing') { gvy = -5.5; thrusting=true; playThrust(); addShake(2.5); setTimeout(()=>thrusting=false,120); }
+  else if(state === 'dead' || state === 'won') { startGame(); }
+}
+document.addEventListener('keydown', e => { if(e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); thrust(); } });
+canvas.addEventListener('mousedown', e => { e.preventDefault(); thrust(); });
+canvas.addEventListener('touchstart', e => { e.preventDefault(); thrust(); }, {passive:false});
+startBtn.addEventListener('click', () => { namePanel.style.display='none'; startBtn.style.display=''; ctrlHint.style.display=''; overlay.classList.add('hidden'); startGame(); });
+
+function startGame() {
+  if(animId) cancelAnimationFrame(animId);
+  resetGame(); state = 'waiting'; obsTimer = 0; loop();
+}
+function loop() {
+  animId = requestAnimationFrame(loop);
+  frame++;
+  let sx=0,sy=0; if(shakeAmt>0.3){ sx=(Math.random()-0.5)*shakeAmt*2; sy=(Math.random()-0.5)*shakeAmt*2; shakeAmt*=0.82; }
+  ctx.save(); ctx.translate(sx,sy);
+  ctx.fillStyle='#020818'; ctx.fillRect(-10,-10,W+20,H+20);
+  STARS.forEach(s=>{ s.y+=s.speed; if(s.y>H) s.y=-2; }); drawStars(frame);
+  drawEarth();
+  if(state === 'waiting') {
+    drawGagarin(80, gy, false);
+    ctx.font = '8px "Press Start 2P"'; ctx.fillStyle = '#f5c842'; ctx.fillText('ПРОБЕЛ / КЛИК — СТАРТ', W/2, H-60);
+    ctx.restore(); drawHUD(); return;
+  }
+  if(state === 'playing') {
+    obsTimer++;
+    gvy += 0.22; if(gvy>7) gvy=7; gy += gvy;
+    if(frame%2===0) spawnExhaust(80, gy+24);
+    if(obsTimer > 80 && obsTimer % OBS_INTERVAL === 0 && score < 108) spawnObstacle();
+    for(const obs of obstacles){
+      obs.x -= OBS_SPEED;
+      if(!obs.passed && obs.x+OBS_W < 80) { obs.passed=true; score++; playPass(); spawnPassEffect(80, gy); if(score>=108){
+        elapsedTime = (performance.now()-startTime)/1000;
+        if(bestTime===0 || elapsedTime<bestTime) bestTime=elapsedTime;
+        addToLeaderboard(108, elapsedTime, true);
+        state='won'; playWin(); setTimeout(showNameEntry, 2200);
+      } }
+    }
+    obstacles = obstacles.filter(o=>o.x>-80);
+    if(startTime>0) elapsedTime = (performance.now()-startTime)/1000;
+    obstacles.forEach(drawObstacle);
+    exhaust.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.life--; p.r*=0.94; }); exhaust=exhaust.filter(p=>p.life>0);
+    drawGagarin(80, gy, thrusting || frame%4<2);
+    if(checkCollision()) { explode(80, gy); playExplosion(); addShake(12); if(score>best) best=score; elapsedTime=(performance.now()-startTime)/1000; addToLeaderboard(score, elapsedTime, false); state='dead'; setTimeout(showNameEntry, 1800); }
+  }
+  if(state === 'dead'){ particles.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.vy+=0.15; p.life--; }); particles=particles.filter(p=>p.life>0); drawParticles(); drawGameOver(); }
+  if(state === 'won'){ winOrbitAngle+=0.012; const orbitCX=W/2, orbitCY=H/2+40; const rx=orbitCX+Math.cos(winOrbitAngle)*170, ry=orbitCY+Math.sin(winOrbitAngle)*170*0.35; drawEarth(-40); drawGagarin(rx, ry, frame%8<4); drawWin(); }
+  ctx.restore(); drawHUD();
+}
+function drawParticles() { particles.forEach(p=>{ ctx.globalAlpha=p.life/p.maxLife; ctx.fillStyle=p.color; ctx.beginPath(); ctx.arc(p.x,p.y,3*(p.life/p.maxLife),0,Math.PI*2); ctx.fill(); }); ctx.globalAlpha=1; }
+
+showFact(0);
+startGame();
+</script>
+</body>
+</html>
